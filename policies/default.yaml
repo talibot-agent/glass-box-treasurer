@@ -1,0 +1,28 @@
+# Plain-language policy compiled to deterministic rules. Each rule carries a clause id cited in decisions.
+version: 1
+base_currency: USD
+clauses:
+  reserve_floor:
+    id: C1
+    text: "Keep at least 2,000 USD (and 500 EUR, 500 GBP) after any outflow."
+    floors: {USD: 2000, EUR: 500, GBP: 500}
+  never_defer:
+    id: C2
+    text: "Payroll and ops-critical shipping are never deferred."
+    categories: [payroll, shipping]
+  fx_autonomy:
+    id: C3
+    text: "Autonomous FX up to 5,000 USD at high forecast confidence, 1,000 USD at medium, none below."
+    limits_usd: {high: 5000, medium: 1000, low: 0}
+    confidence_bands: {high: 0.8, medium: 0.5}
+  payout_autonomy:
+    id: C4
+    text: "Payouts above 10,000 USD equivalent need a human."
+    max_usd: 10000
+  new_beneficiary:
+    id: C5
+    text: "Any payout to a new (unverified) beneficiary needs a human."
+  swift_fee:
+    id: C6
+    text: "SWIFT payouts cost a flat 12.85 EUR; include it in the conversion."
+    fee: {currency: EUR, amount: 12.85}
