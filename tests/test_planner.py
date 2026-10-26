@@ -29,8 +29,8 @@ def test_initial_plan_matches_kit1(tmp_path):
 def test_convert_is_minimum_including_swift_fee(tmp_path):
     _, plan, _ = mk(tmp_path)
     c = plan["OB-SUPP"].proposal
-    # need 4200 + 12.85 fee; keep EUR floor 500 out of 1500 -> spendable 1000
-    assert (c.sell_currency, c.buy_currency, c.buy_amount) == ("USD", "EUR", D("3212.85"))
+    # need 4200 + 14.43 fee (13.43 live + 1.00 buffer); keep EUR floor 500 out of 1500 -> spendable 1000
+    assert (c.sell_currency, c.buy_currency, c.buy_amount) == ("USD", "EUR", D("3214.43"))
     assert plan["OB-SUPP"].verdict == Verdict.APPROVE
 
 

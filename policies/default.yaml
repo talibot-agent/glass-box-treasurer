@@ -24,5 +24,5 @@ clauses:
     text: "Any payout to a new (unverified) beneficiary needs a human."
   swift_fee:
     id: C6
-    text: "SWIFT payouts cost a flat 12.85 EUR; include it in the conversion."
-    fee: {currency: EUR, amount: 12.85}
+    text: "Include each SWIFT payout fee plus a buffer in the conversion. Fee = highest observed live fee (13.43 EUR on 2026-10-26; the guide says 12.85)."
+    fee: {currency: EUR, amount: 13.43, buffer: 1.00}

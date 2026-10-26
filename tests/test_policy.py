@@ -80,10 +80,10 @@ def test_contradicting_email_flips_same_conversion_to_human():
 
 def test_swift_fee_included():
     o = ob(currency="EUR", amount=D("3000"), method="SWIFT")
-    assert required_amount(o, POL) == D("3012.85")
+    assert required_amount(o, POL) == D("3014.43")
     d = ev(conv("2000"), o)
     assert d.verdict == Verdict.REJECT and "C6" in d.clauses
-    assert ev(conv("2012.85"), o).verdict == Verdict.APPROVE
+    assert ev(conv("2014.43"), o).verdict == Verdict.APPROVE
 
 
 def test_conversion_wrong_currency_rejected():

@@ -93,3 +93,18 @@ def test_audit_records_execution(env, tmp_path):
     ex.execute(conv(), SUPP)
     kinds = [e["kind"] for e in AuditLog(tp / "a.jsonl").entries()]
     assert "execute" in kinds and AuditLog(tp / "a.jsonl").verify()
+
+def test_transfer_fee_reconciled_and_mismatch_audited(tmp_path):
+    from glassbox.fees import FeeBook
+    from glassbox.policy import Policy
+    import pathlib
+    pol = Policy.load(pathlib.Path(__file__).resolve().parents[1] / "policies/default.yaml")
+    awx = FakeAirwallex({"EUR": D("5000")}, {})
+    orig = awx.create_transfer
+    awx.create_transfer = lambda *a, **k: {**orig(*a, **k), "fee_amount": 15.0, "fee_currency": "EUR"}
+    fb = FeeBook(tmp_path / "fees.json")
+    ex = Executor(awx, AuditLog(tmp_path / "a.jsonl"), ApprovalBook(tmp_path / "ap.json"), tmp_path / "l.json",
+                  fees=fb, policy=pol)
+    ex.execute(fund(SUPP), SUPP, beneficiary_id="B2")
+    kinds = [e["kind"] for e in AuditLog(tmp_path / "a.jsonl").entries()]
+    assert "fee_mismatch" in kinds and fb.policy(pol).swift_fee()[1] == D("16.00")

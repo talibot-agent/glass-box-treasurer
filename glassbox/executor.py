@@ -20,8 +20,9 @@ class ExecutionRefused(Exception):
 
 
 class Executor:
-    def __init__(self, client, audit: AuditLog, approvals: ApprovalBook, ledger_path):
+    def __init__(self, client, audit: AuditLog, approvals: ApprovalBook, ledger_path, fees=None, policy=None):
         self.client, self.audit, self.approvals = client, audit, approvals
+        self.fees, self.policy = fees, policy
         self.path = Path(ledger_path)
         self.ledger = json.loads(self.path.read_text()) if self.path.exists() else {}
 
@@ -67,6 +68,11 @@ class Executor:
             res = {"quote_id": q["quote_id"], "rate": q["rate"], **res}
         else:
             res = self.client.create_transfer(beneficiary_id, ob.currency, ob.amount, rid, method=ob.method)
+            if self.fees is not None and res.get("fee_amount") is not None:
+                fee, fccy = Decimal(str(res["fee_amount"])), res.get("fee_currency", ob.currency)
+                if self.fees.observe(fccy, ob.method, fee, self.policy):
+                    self.audit.append("fee_mismatch", {"obligation": ob.id, "reported": fee, "currency": fccy,
+                                                       "policy_base": self.policy.c("swift_fee")["fee"]["amount"]})
         rec.update(status="DONE", result=res)
         self._save()
         self.audit.append("execute", {"key": key, "request_id": rid, "binding": b.__dict__, "approver": approver,

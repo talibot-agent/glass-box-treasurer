@@ -47,8 +47,15 @@ class Policy:
         return D(str(limits["low"]))
 
     def swift_fee(self) -> tuple[str, Decimal]:
+        """Fee to reserve per SWIFT payout: observed fee + safety buffer."""
         f = self.c("swift_fee")["fee"]
-        return f["currency"], D(str(f["amount"]))
+        return f["currency"], D(str(f["amount"])) + D(str(f.get("buffer", 0)))
+
+    def with_swift_fee(self, amount: Decimal) -> "Policy":
+        import copy
+        raw = copy.deepcopy(self.raw)
+        raw["clauses"]["swift_fee"]["fee"]["amount"] = str(amount)
+        return Policy(raw)
 
 
 def to_usd(amount: Decimal, currency: str, rates_to_usd: Mapping[str, Decimal]) -> Decimal:

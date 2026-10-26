@@ -13,8 +13,10 @@ Built with AI assistance (Tali Builder, a Grok Bot agent) for Mykel Nelson. Sand
 - `glassbox/planner.py`: deterministic planner + incremental re-plan on deposit / confidence change, audited
 - `scripts/demo_offline.py`: offline Kit 1 story
 - `glassbox/beneficiaries.py`, `approvals.py`, `executor.py`: corridor payloads, bound single-use approvals, idempotent executor
+- `glassbox/fees.py`, `rates.py`, `tracking.py`, `webhook.py`: fee reconciliation, pair-direction rates, transfer tracking to terminal, signed webhooks
+- `scripts/live_verify2.py`: live rates, quote-vs-settlement check, SENT→PAID tracking, local webhook round trip
 - `scripts/live_verify.py`: small-amount live sandbox check (writes gitignored `out/`)
-- `tests/`: pytest (64 passing)
+- `tests/`: pytest (81 passing)
 
 See `docs/ARCHITECTURE.md` for the design.
 

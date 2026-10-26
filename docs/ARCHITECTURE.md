@@ -82,6 +82,25 @@ the executor should reconcile against `fee_amount` (TODO: set C6 from a probe, o
 live rates in the planner. (3) The schema response lists `payment_methods`, but validate accepts `transfer_methods`
 as the guide says. (4) The Global Account still reports PROCESSING, yet deposits post.
 
+## Fees, rates, tracking, webhooks
+- **Fees** (`glassbox/fees.py`): policy C6 reserves the observed live SWIFT fee (EUR 13.43) plus a 1.00 buffer = 14.43 per
+  payout. After each transfer the executor reads `fee_amount`/`fee_currency`. FeeBook keeps the highest fee seen and lifts
+  the policy fee (never lowers it). A fee above the policy's base is audited as `fee_mismatch`.
+- **Rates** (`glassbox/rates.py`): `rate`/`client_rate` follow `currency_pair` (EURUSD = USD per EUR) whichever side you
+  sell. Verified live: a USD→EUR and an EUR→USD check both return EURUSD. `rate_to_usd()` inverts USDxxx pairs.
+  `quote_cost()` prefers the reported sell amount and refuses to guess without a pair. `live_rates_to_usd()` feeds the planner.
+- **Tracking** (`glassbox/tracking.py`): polls `GET /transfers/{id}` with backoff until PAID or CANCELLED. SENT is in-flight.
+  CANCELLED is reported as FAILED with `failure_type`/`failure_reason`. There is no FAILED status. A poll budget that runs out
+  returns `final=False` (unknown, not failed). Each status change is audited.
+- **Webhooks** (`glassbox/webhook.py`): `x-signature` = hex HMAC-SHA256(secret, `x-timestamp` + raw body). Verified on raw
+  bytes with a constant-time compare and a 5-minute timestamp tolerance. Event ids are deduped and persisted; it returns 200 fast.
+  `serve()` is a stdlib HTTP wrapper.
+
+Live check #2 (`scripts/live_verify2.py`, 2026-10-26 ~7:29 PM ET, sandbox funds): live rates EUR 1.123242 and GBP 1.341317 USD
+fed into the planner (same Kit 1 decisions; SUPP buys 3,214.43 EUR). A 10 EUR quote predicted 11.24 USD and the conversion
+settled at 11.24. The SWIFT transfer was simulated SENT→PAID and tracked to PAID; fee 13.43 is within policy. A local
+signed webhook returned valid 200, replay 200 (delivered once), tampered 401. The audit chain is valid.
+
 ## Not yet built
-Fee reconciliation, transfer status polling (SENT is in-flight, CANCELLED + failure_type), the webhook receiver (HMAC on raw bytes, event-id dedupe), the web UI,
+A registered Airwallex webhook subscription (needs a public HTTPS URL), routing webhook events into the tracker, a live CANCELLED-path test, the web UI,
 an LLM explanation layer, and an optional Metal testnet hash anchor.

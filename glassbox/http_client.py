@@ -7,6 +7,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Callable
 
+from .rates import quote_cost
+
 DEFAULT_BASE = "https://api.sandbox.airwallex.com"  # official per builder guide; api-demo also works
 SECRETS = "/workspace/projects/_secrets/airwallex_sandbox.txt"
 
@@ -99,7 +101,10 @@ class AirwallexHTTP:
         body = self._req("POST", "/fx/quotes/create", {"sell_currency": sell, "buy_currency": buy,
                                                        "buy_amount": Decimal(buy_amount), "validity": "MIN_15"})
         q = {"quote_id": body["quote_id"], "sell": sell, "buy": buy,
-             "buy_amount": Decimal(str(buy_amount)), "rate": Decimal(str(body["client_rate"]))}  # quotes expose client_rate
+             "buy_amount": Decimal(str(buy_amount)), "rate": Decimal(str(body["client_rate"])),  # quotes expose client_rate
+             "currency_pair": body.get("currency_pair"),
+             "sell_cost": quote_cost({**body, "sell_currency": sell, "buy_currency": buy}, Decimal(str(buy_amount)))}
+        # client_rate follows currency_pair (EURUSD = USD per EUR), not sell/buy; see glassbox/rates.py
         self._quotes[q["quote_id"]] = q
         return q
 
