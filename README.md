@@ -1,6 +1,7 @@
 # Glass Box Treasurer
 Adaptive Treasury Controller (Airwallex Agentic Banking Hackathon, Starter Kit 01). The agent proposes FUND / CONVERT / DEFER / ESCALATE; a **deterministic policy engine** approves; every decision cites evidence and policy clauses; a **hash-chained audit log** makes it replayable.
-Built with AI assistance (Tali Builder, a Grok Bot agent) for Mykel Nelson. Sandbox only, no real money.
+> **AI authorship disclosure:** this code, its tests and its docs were written by an AI agent (Tali Builder, a Grok Bot
+> agent) under the direction and approval of Mykel Nelson. Built for the Airwallex Agentic Banking hackathon. Sandbox only, no real money.
 
 ## Layout
 - `policies/default.yaml`: plain-language clauses C1–C6 (reserve floor, never-defer, confidence-tied FX autonomy, payout cap, new beneficiary, SWIFT fee)
@@ -16,7 +17,9 @@ Built with AI assistance (Tali Builder, a Grok Bot agent) for Mykel Nelson. Sand
 - `glassbox/fees.py`, `rates.py`, `tracking.py`, `webhook.py`: fee reconciliation, pair-direction rates, transfer tracking to terminal, signed webhooks
 - `scripts/live_verify2.py`: live rates, quote-vs-settlement check, SENT→PAID tracking, local webhook round trip
 - `scripts/live_verify.py`: small-amount live sandbox check (writes gitignored `out/`)
-- `tests/`: pytest (81 passing)
+- `glassbox/ui.py`: local dashboard (plan, decisions with cited clauses, approvals with an approve button, transfers, audit log). Run `python3 scripts/ui_demo.py` and open http://127.0.0.1:8800
+- `scripts/webhook_server.py`: webhook receiver that feeds `TransferState`
+- `tests/`: pytest (90 passing)
 
 See `docs/ARCHITECTURE.md` for the design.
 

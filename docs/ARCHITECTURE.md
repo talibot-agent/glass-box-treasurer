@@ -101,6 +101,24 @@ fed into the planner (same Kit 1 decisions; SUPP buys 3,214.43 EUR). A 10 EUR qu
 settled at 11.24. The SWIFT transfer was simulated SENT→PAID and tracked to PAID; fee 13.43 is within policy. A local
 signed webhook returned valid 200, replay 200 (delivered once), tampered 401. The audit chain is valid.
 
+## Webhooks → tracker, CANCELLED path, UI (2026-10-26)
+- `TransferState` persists the latest state per transfer. It is fed by both polling (`TransferTracker(state=...)`) and
+  `payout.transfer.*` webhook events (`apply_event`). A terminal state is sticky, and an older event never overwrites a newer one.
+- `failure_of()` reads live failure details from `failure{code, details.type, message}`. Flat `failure_type` fields are also accepted.
+- Live CANCELLED path, 10 EUR SWIFT transfer `d50458ee-c7b2-4efa-9e03-1ff0716a1ad1` to the DE beneficiary:
+  - SCHEDULED → simulate SENT worked.
+  - Simulating SENT → `CANCELLED` was rejected: 400 for an invalid failure_type, then 500.
+  - Simulating `next_status=FAILED, failure_type=BENEFICIARY_BANK_RETURNED` was accepted. The live status became **CANCELLED** with
+    `failure.details.type=INCORRECT_ROUTING` and the message "Beneficiary bank returned (90802)".
+  - The tracker reached terminal with outcome FAILED. The audit chain is valid.
+- Webhook subscription: `POST /webhooks/create` with `{request_id, url, events, version}` returns `{id, secret, ...}`.
+  - `request_id` is required; without it you get a bare 400.
+  - The secret is stored in `_secrets/`, never in the repo.
+  - A sandbox subscription was created for a cloudflared quick-tunnel URL. Real delivery could not be verified because this
+    build box cannot reach the Cloudflare edge on port 7844 (QUIC and http2 both time out). Signature checking, replay and
+    tamper handling are verified locally (see above).
+- UI: `glassbox/ui.py` is stdlib-only, binds to 127.0.0.1 only and escapes all HTML. Approve is a POST that marks the binding APPROVED once (409 after that).
+  Execution still requires the Executor to consume the exact binding digest.
+
 ## Not yet built
-A registered Airwallex webhook subscription (needs a public HTTPS URL), routing webhook events into the tracker, a live CANCELLED-path test, the web UI,
-an LLM explanation layer, and an optional Metal testnet hash anchor.
+Verified real webhook delivery (needs a host with outbound access to a tunnel or a public URL), an LLM explanation layer, and an optional Metal testnet hash anchor.

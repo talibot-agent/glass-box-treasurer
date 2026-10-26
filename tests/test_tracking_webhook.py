@@ -69,3 +69,49 @@ def test_dedupe_survives_restart(tmp_path):
     rx(tmp_path, got).handle({"x-timestamp": ts, "x-signature": sign(ts, body)}, body)
     rx(tmp_path, got).handle({"x-timestamp": ts, "x-signature": sign(ts, body)}, body)
     assert len(got) == 1
+
+# --- webhook events drive the tracker ---
+from glassbox.tracking import TransferState
+
+def test_events_update_state_out_of_order_and_terminal_is_sticky(tmp_path):
+    s = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl"))
+    s.apply_event({"id": "e2", "name": "payout.transfer.paid", "created_at": "2026-10-26T23:40:00+0000",
+                   "data": {"object": {"id": "T1", "status": "PAID"}}})
+    s.apply_event({"id": "e1", "name": "payout.transfer.sent", "created_at": "2026-10-26T23:39:00+0000",
+                   "data": {"object": {"id": "T1", "status": "SENT"}}})   # late, older event
+    assert s.get("T1")["status"] == "PAID" and s.get("T1")["final"]
+
+def test_cancelled_event_records_failure(tmp_path):
+    s = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl"))
+    s.apply_event({"id": "e", "name": "payout.transfer.cancelled", "created_at": "2026-10-26T23:40:00+0000",
+                   "data": {"object": {"id": "T2", "status": "CANCELLED", "failure_type": "BENEFICIARY_BANK_RETURNED"}}})
+    st = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl")).get("T2")
+    assert st["outcome"] == "FAILED" and st["failure_type"] == "BENEFICIARY_BANK_RETURNED"
+
+def test_status_derived_from_event_name_when_object_lacks_it(tmp_path):
+    s = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl"))
+    s.apply_event({"id": "e", "name": "payout.transfer.sent", "created_at": "2026-10-26T23:40:00+0000", "data": {"object": {"id": "T3"}}})
+    assert s.get("T3")["status"] == "SENT" and not s.get("T3")["final"]
+
+def test_non_transfer_events_ignored(tmp_path):
+    s = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl"))
+    assert s.apply_event({"id": "e", "name": "balance.updated", "data": {"object": {}}}) is None
+
+def test_tracker_poll_feeds_state(tmp_path):
+    s = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl"))
+    t = TransferTracker(Seq(["SENT", "PAID"]), AuditLog(tmp_path / "a.jsonl"), sleep=lambda x: None, state=s)
+    t.wait("T9"); assert s.get("T9")["status"] == "PAID"
+
+def test_failure_read_from_live_failure_object():
+    from glassbox.tracking import failure_of
+    # shape observed live 2026-10-26 on a sandbox SENT->FAILED simulation (status became CANCELLED)
+    b = {"status": "CANCELLED", "failure": {"code": "90802", "details": {"type": "INCORRECT_ROUTING"}, "message": "Beneficiary bank returned"}}
+    assert failure_of(b) == ("INCORRECT_ROUTING", "Beneficiary bank returned (90802)")
+    assert failure_of({"failure_type": "X", "failure_reason": "y"}) == ("X", "y")
+    assert failure_of({}) == (None, None)
+
+def test_event_with_failure_object(tmp_path):
+    s = TransferState(tmp_path / "st.json", AuditLog(tmp_path / "a.jsonl"))
+    s.apply_event({"id": "e", "name": "payout.transfer.cancelled", "created_at": "t", "data": {"object": {"id": "T", "status": "CANCELLED",
+                   "failure": {"code": "1", "details": {"type": "ACCOUNT_CLOSED"}, "message": "closed"}}}})
+    assert s.get("T")["failure_type"] == "ACCOUNT_CLOSED"

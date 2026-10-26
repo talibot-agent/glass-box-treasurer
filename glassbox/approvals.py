@@ -51,6 +51,9 @@ class ApprovalBook:
         self._d[token].update(status="APPROVED", approver=approver, approved_at=time.time())
         self._save()
 
+    def all(self) -> dict:
+        return json.loads(json.dumps(self._d))
+
     def status(self, b: Binding) -> str | None:
         e = self._d.get(b.digest)
         return e and e["status"]
