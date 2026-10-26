@@ -10,15 +10,19 @@ Built with AI assistance (Tali Builder, a Grok Bot agent) for Mykel Nelson. Sand
 - `glassbox/http_client.py`: real sandbox client `AirwallexHTTP` (stdlib; token cache ~25 min, one re-login on 401, injectable transport, repr hides secrets). Creds from env `AWX_CLIENT_ID`/`AWX_API_KEY` or `_secrets/airwallex_sandbox.txt`
 - `glassbox/seed.py`: Kit 1 scenario, 5 obligations (USD/EUR/GBP, ≤72h): shipping, SWIFT EUR supplier, SaaS, new-vendor GBP, payroll
 - `scripts/smoke.py`: login + non-zero balances + global accounts (`--fund USD 25000` for a simulated deposit)
-- `tests/`: pytest (31 passing)
+- `glassbox/planner.py`: deterministic planner + incremental re-plan on deposit / confidence change, audited
+- `scripts/demo_offline.py`: offline Kit 1 story
+- `tests/`: pytest (44 passing)
+
+See `docs/ARCHITECTURE.md` for the design.
 
 ## Setup
 ```sh
 pip install pyyaml pytest
 python3 -m pytest -q
 ```
-Smoke: `python3 scripts/smoke.py`. Base URL defaults to `https://api-demo.airwallex.com`; `api.sandbox.airwallex.com` also authenticates (both tested 2026-10-26). Override with `AWX_BASE_URL`.
+Smoke: `python3 scripts/smoke.py`. Base URL defaults to `https://api.sandbox.airwallex.com` (official); `api-demo.airwallex.com` also authenticates (both tested 2026-10-26). Override with `AWX_BASE_URL`.
 Note: a new sandbox comes pre-funded with 10M each of USD/EUR/GBP/CNY, so the demo uses scenario balances from `seed.py` rather than the raw account balances.
 
 ## Next
-Planner + partial recalculation on deposit → executors → web UI/approval card → video.
+Beneficiaries + executors (quote→conversion, transfer) with duplicate lock → approval binding → web UI/approval card → video.

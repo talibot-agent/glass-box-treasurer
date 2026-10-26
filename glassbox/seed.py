@@ -2,7 +2,7 @@
 from decimal import Decimal as D
 from .models import Obligation
 
-SEED_BALANCES = {"USD": D("12000"), "EUR": D("1500"), "GBP": D("600")}
+SEED_BALANCES = {"USD": D("15500"), "EUR": D("1500"), "GBP": D("600")}
 
 OBLIGATIONS = [
     Obligation("OB-SHIP", "Maersk Freight", "shipping", "USD", D("6500"), 24),

@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Callable
 
-DEFAULT_BASE = "https://api-demo.airwallex.com"
+DEFAULT_BASE = "https://api.sandbox.airwallex.com"  # official per builder guide; api-demo also works
 SECRETS = "/workspace/projects/_secrets/airwallex_sandbox.txt"
 
 Transport = Callable[[str, str, dict, bytes | None], tuple[int, dict]]
@@ -54,6 +54,7 @@ class AirwallexHTTP:
         self.base = (base or os.environ.get("AWX_BASE_URL") or DEFAULT_BASE).rstrip("/")
         self._t, self._clock = transport, clock
         self._token, self._exp = None, 0.0
+        self._quotes: dict[str, dict] = {}
 
     def __repr__(self):  # never leak secrets
         return f"AirwallexHTTP(base={self.base!r})"
@@ -97,11 +98,17 @@ class AirwallexHTTP:
     def create_quote(self, sell, buy, buy_amount):
         body = self._req("POST", "/fx/quotes/create", {"sell_currency": sell, "buy_currency": buy,
                                                        "buy_amount": Decimal(buy_amount), "validity": "MIN_15"})
-        return {"quote_id": body["quote_id"], "sell": sell, "buy": buy,
-                "buy_amount": Decimal(str(buy_amount)), "rate": Decimal(str(body.get("client_rate", body.get("rate", 0))))}
+        q = {"quote_id": body["quote_id"], "sell": sell, "buy": buy,
+             "buy_amount": Decimal(str(buy_amount)), "rate": Decimal(str(body["client_rate"]))}  # quotes expose client_rate
+        self._quotes[q["quote_id"]] = q
+        return q
 
     def create_conversion(self, quote_id, request_id):
-        return self._req("POST", "/fx/conversions/create", {"quote_id": quote_id, "request_id": request_id})
+        """Docs: request_id, buy_currency, sell_currency, one of buy_amount/sell_amount; quote_id locks the rate."""
+        q = self._quotes[quote_id]
+        return self._req("POST", "/fx/conversions/create", {
+            "request_id": request_id, "quote_id": quote_id, "buy_currency": q["buy"],
+            "sell_currency": q["sell"], "buy_amount": str(q["buy_amount"])})
 
     def create_transfer(self, beneficiary_id, currency, amount, request_id):
         return self._req("POST", "/transfers/create", {
@@ -113,8 +120,13 @@ class AirwallexHTTP:
         b = self._req("GET", "/global_accounts")
         return b.get("items", []) if isinstance(b, dict) else b
 
-    def simulate_deposit(self, currency, amount, global_account_id: str | None = None):
-        payload = {"amount": Decimal(amount), "currency": currency, "request_id": str(uuid.uuid4())}
-        if global_account_id:
-            payload["global_account_id"] = global_account_id
-        return self._req("POST", "/simulation/deposit/create", payload)
+    def simulate_deposit(self, currency, amount, global_account_id: str | None = None, payer_name="Glass Box demo"):
+        """Docs: global_account_id, amount, payer_name. No currency field: it lands in the global account's currency."""
+        if not global_account_id:
+            ga = next((g for g in self.global_accounts() if g.get("currency") == currency
+                       or currency in {f.get("currency") for f in g.get("supported_features", g.get("required_features", []))}), None)
+            if not ga:
+                raise AirwallexError(0, {"message": f"no global account for {currency}"})
+            global_account_id = ga["id"]
+        return self._req("POST", "/simulation/deposit/create",
+                         {"global_account_id": global_account_id, "amount": Decimal(amount), "payer_name": payer_name})

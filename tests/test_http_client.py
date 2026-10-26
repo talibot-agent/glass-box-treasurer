@@ -1,4 +1,4 @@
-import json
+import json, os
 from decimal import Decimal as D
 import pytest
 from glassbox.http_client import AirwallexHTTP, AirwallexError
@@ -69,3 +69,26 @@ def test_fx_calls_have_no_api_version_header():
 def test_repr_hides_secrets():
     c, _ = client({})
     assert "key" not in repr(c) and "cid" not in repr(c)
+
+
+def test_default_base_is_official_sandbox(monkeypatch):
+    monkeypatch.delenv("AWX_BASE_URL", raising=False)
+    assert AirwallexHTTP("a", "b").base == "https://api.sandbox.airwallex.com"
+
+
+def test_conversion_payload_matches_docs():
+    c, t = client({("POST", "/fx/quotes/create"): (201, {"quote_id": "Q1", "client_rate": 0.92}),
+                   ("POST", "/fx/conversions/create"): (201, {"status": "SETTLED"})})
+    c.create_quote("USD", "EUR", D("7525.70"))
+    c.create_conversion("Q1", "rid")
+    body = t.calls[-1][3]
+    assert body == {"request_id": "rid", "quote_id": "Q1", "buy_currency": "EUR",
+                    "sell_currency": "USD", "buy_amount": "7525.70"}
+
+
+def test_deposit_payload_has_no_currency_and_uses_global_account():
+    c, t = client({("GET", "/global_accounts"): (200, {"items": [{"id": "GA1", "currency": "USD"}]}),
+                   ("POST", "/simulation/deposit/create"): (201, {"status": "PENDING"})})
+    c.simulate_deposit("USD", D("25000"))
+    body = t.calls[-1][3]
+    assert body["global_account_id"] == "GA1" and body["amount"] == 25000 and "currency" not in body
