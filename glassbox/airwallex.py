@@ -14,7 +14,7 @@ class AirwallexClient(Protocol):
     def fx_rate(self, sell: str, buy: str) -> Decimal: ...
     def create_quote(self, sell: str, buy: str, buy_amount: Decimal) -> dict: ...
     def create_conversion(self, quote_id: str, request_id: str) -> dict: ...
-    def create_transfer(self, beneficiary_id: str, currency: str, amount: Decimal, request_id: str) -> dict: ...
+    def create_transfer(self, beneficiary_id: str, currency: str, amount: Decimal, request_id: str, method: str = "LOCAL") -> dict: ...
     def simulate_deposit(self, currency: str, amount: Decimal) -> dict: ...
 
 
@@ -64,7 +64,7 @@ class FakeAirwallex:
         self._by_request[request_id] = res
         return res
 
-    def create_transfer(self, beneficiary_id, currency, amount, request_id):
+    def create_transfer(self, beneficiary_id, currency, amount, request_id, method="LOCAL"):
         if request_id in self._by_request:
             return self._by_request[request_id]
         amount = Decimal(amount)
@@ -72,7 +72,8 @@ class FakeAirwallex:
             raise InsufficientFunds(currency)
         self._bal[currency] -= amount
         res = {"transfer_id": f"T-{uuid.uuid4().hex[:8]}", "status": "PROCESSING",
-               "beneficiary_id": beneficiary_id, "currency": currency, "amount": amount}
+               "beneficiary_id": beneficiary_id, "currency": currency, "amount": amount,
+               "method": method, "request_id": request_id}
         self.transfers.append(res)
         self._by_request[request_id] = res
         return res

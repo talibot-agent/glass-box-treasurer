@@ -110,10 +110,12 @@ class AirwallexHTTP:
             "request_id": request_id, "quote_id": quote_id, "buy_currency": q["buy"],
             "sell_currency": q["sell"], "buy_amount": str(q["buy_amount"])})
 
-    def create_transfer(self, beneficiary_id, currency, amount, request_id):
+    def create_transfer(self, beneficiary_id, currency, amount, request_id, method="LOCAL"):
+        if method not in ("LOCAL", "SWIFT"):
+            raise ValueError("transfer_method must be LOCAL or SWIFT")
         return self._req("POST", "/transfers/create", {
             "beneficiary_id": beneficiary_id, "transfer_currency": currency, "transfer_amount": Decimal(amount),
-            "source_currency": currency, "transfer_method": "LOCAL", "reference": "GlassBox", "reason": "payment_to_supplier",
+            "source_currency": currency, "transfer_method": method, "reference": "GlassBox", "reason": "payment_to_supplier",
             "request_id": request_id})
 
     def global_accounts(self) -> list[dict]:
@@ -130,3 +132,25 @@ class AirwallexHTTP:
             global_account_id = ga["id"]
         return self._req("POST", "/simulation/deposit/create",
                          {"global_account_id": global_account_id, "amount": Decimal(amount), "payer_name": payer_name})
+
+    # --- beneficiaries (verified live 2026-10-26: schema + validate return OK for US LOCAL and DE SWIFT) ---
+    def beneficiary_schema(self, country, currency, method, entity_type="COMPANY"):
+        return self._req("POST", "/beneficiaries/schema", {"bank_country_code": country, "account_currency": currency,
+                                                          "transfer_method": method, "entity_type": entity_type})
+
+    def validate_beneficiary(self, payload) -> bool:
+        self._req("POST", "/beneficiaries/validate", payload)  # raises AirwallexError on any field problem
+        return True
+
+    def create_beneficiary(self, payload) -> str:
+        body = self._req("POST", "/beneficiaries/create", payload)
+        return body.get("beneficiary_id") or body["id"]
+
+    def get_transfer(self, transfer_id):
+        return self._req("GET", f"/transfers/{transfer_id}")
+
+    def simulate_transfer(self, transfer_id, next_status, failure_type=None):
+        body = {"next_status": next_status}
+        if failure_type:
+            body["failure_type"] = failure_type
+        return self._req("POST", f"/simulation/transfers/{transfer_id}/transition", body)

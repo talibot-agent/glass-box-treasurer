@@ -12,7 +12,9 @@ Built with AI assistance (Tali Builder, a Grok Bot agent) for Mykel Nelson. Sand
 - `scripts/smoke.py`: login + non-zero balances + global accounts (`--fund USD 25000` for a simulated deposit)
 - `glassbox/planner.py`: deterministic planner + incremental re-plan on deposit / confidence change, audited
 - `scripts/demo_offline.py`: offline Kit 1 story
-- `tests/`: pytest (44 passing)
+- `glassbox/beneficiaries.py`, `approvals.py`, `executor.py`: corridor payloads, bound single-use approvals, idempotent executor
+- `scripts/live_verify.py`: small-amount live sandbox check (writes gitignored `out/`)
+- `tests/`: pytest (64 passing)
 
 See `docs/ARCHITECTURE.md` for the design.
 

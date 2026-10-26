@@ -92,3 +92,17 @@ def test_deposit_payload_has_no_currency_and_uses_global_account():
     c.simulate_deposit("USD", D("25000"))
     body = t.calls[-1][3]
     assert body["global_account_id"] == "GA1" and body["amount"] == 25000 and "currency" not in body
+
+
+def test_beneficiary_schema_validate_create_and_transfer_method():
+    c, t = client({("POST", "/beneficiaries/schema"): (200, {"schema": {}}),
+                   ("POST", "/beneficiaries/validate"): (200, "OK"),
+                   ("POST", "/beneficiaries/create"): (201, {"beneficiary_id": "B9"}),
+                   ("POST", "/transfers/create"): (201, {"id": "T1", "status": "PROCESSING"})})
+    c.beneficiary_schema("DE", "EUR", "SWIFT")
+    assert t.calls[-1][3] == {"bank_country_code": "DE", "account_currency": "EUR", "transfer_method": "SWIFT", "entity_type": "COMPANY"}
+    assert c.validate_beneficiary({"beneficiary": {}, "transfer_methods": ["SWIFT"]}) is True
+    assert c.create_beneficiary({"beneficiary": {}, "transfer_methods": ["SWIFT"]}) == "B9"
+    c.create_transfer("B9", "EUR", D("10"), "r" * 36, method="SWIFT")
+    body = t.calls[-1][3]
+    assert body["transfer_method"] == "SWIFT" and body["transfer_currency"] == "EUR" and body["request_id"] == "r" * 36

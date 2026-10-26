@@ -58,7 +58,30 @@ SAAS becomes FUND. Reserve floors hold; the audit chain verifies.
   currency); response PENDING but the balance posts immediately.
 - Rate limit 10 req/s per endpoint, 20 global.
 
+## Beneficiaries, executor, approvals
+- `glassbox/beneficiaries.py` builds US/GB/DE payloads per corridor rules (aba + "Checking"; bank_name + lowercase
+  sort_code; IBAN with local mod-97 check + swift_code). Flow: `/beneficiaries/schema` → `/beneficiaries/validate` → `/beneficiaries/create`.
+- `glassbox/approvals.py`: a `Binding` = (obligation, action, amount to 2dp, currency, counterparty, sha256 of evidence).
+  Approvals are requested → approved → consumed once; any field change gives a different digest, so no reuse.
+- `glassbox/executor.py`: executes only CONVERT (fresh quote, then conversion) and FUND (transfer with the obligation's
+  LOCAL/SWIFT method). NEEDS_HUMAN requires consuming the matching approval. `request_id = uuid5(action:obligation:binding)`
+  is stable across retries; a persistent ledger is the duplicate lock (DONE ops are never resent, even after restart).
+
+## Live sandbox verification (scripts/live_verify.py, 2026-10-26 ~7:40 PM ET, sandbox funds only)
+| Step | Result |
+|---|---|
+| Conversion buy 10 EUR from USD (quote + conversion body) | SETTLED, sell 11.24 USD, `client_rate` 1.124136 |
+| Re-run same conversion | ALREADY_DONE (duplicate lock, no API call) |
+| Deposit 10 USD (`global_account_id`, `amount`, `payer_name`) | accepted, PENDING, posted (USD net −1.24 = −11.24 + 10) |
+| Beneficiary schema DE/EUR/SWIFT; validate + create US LOCAL and DE SWIFT | OK |
+| Transfer 10 EUR SWIFT to the DE beneficiary | SCHEDULED, **fee 13.43 EUR** (payer pays 23.43) |
+
+Findings: (1) the live SWIFT fee was **EUR 13.43, not the guide's 12.85**. The fee stays in policy config (C6), and
+the executor should reconcile against `fee_amount` (TODO: set C6 from a probe, or refuse if the fee exceeds C6).
+(2) The quote's `client_rate` is **sell per buy** (USD per EUR); the fake uses buy per sell. Normalise before using
+live rates in the planner. (3) The schema response lists `payment_methods`, but validate accepts `transfer_methods`
+as the guide says. (4) The Global Account still reports PROCESSING, yet deposits post.
+
 ## Not yet built
-Beneficiary schema/create, the executors (quote → conversion, transfer) with a duplicate lock, approval binding
-(amount, currency, counterparty, evidence hash), the webhook receiver (HMAC on raw bytes, event-id dedupe), the web UI,
+Fee reconciliation, transfer status polling (SENT is in-flight, CANCELLED + failure_type), the webhook receiver (HMAC on raw bytes, event-id dedupe), the web UI,
 an LLM explanation layer, and an optional Metal testnet hash anchor.
