@@ -78,6 +78,23 @@ class FakeAirwallex:
         self._by_request[request_id] = res
         return res
 
+    def get_transfer(self, transfer_id):
+        t = next(t for t in self.transfers if t["transfer_id"] == transfer_id)
+        return {"id": transfer_id, **t}
+
+    def simulate_transition(self, transfer_id, next_status, failure_type=None):
+        """Mirror of POST /simulation/transfers/{id}/transition. SENT must come before PAID/FAILED; a FAILED
+        transition lands as status CANCELLED + failure_type (there is no FAILED status) and refunds the payout."""
+        t = next(t for t in self.transfers if t["transfer_id"] == transfer_id)
+        if next_status in ("PAID", "FAILED") and t["status"] != "SENT":
+            raise ValueError(f"simulate SENT before {next_status} (current {t['status']})")
+        if next_status == "FAILED":
+            t.update(status="CANCELLED", failure_type=failure_type or "UNKNOWN")
+            self._bal[t["currency"]] = self._bal.get(t["currency"], Decimal(0)) + t["amount"]
+        else:
+            t["status"] = next_status
+        return {"id": transfer_id, **t}
+
     def simulate_deposit(self, currency, amount):
         self._bal[currency] = self._bal.get(currency, Decimal(0)) + Decimal(amount)
         return {"status": "SETTLED", "currency": currency, "amount": Decimal(amount)}

@@ -21,6 +21,10 @@ D = Decimal
 BIG = D("1e15")
 
 
+def policy_hash(policy: Policy) -> str:
+    return hashlib.sha256(json.dumps(policy.raw, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
 @dataclass
 class PlanItem:
     obligation_id: str
@@ -164,7 +168,8 @@ class Planner:
     # ---------- public API ----------
     def plan(self, balances: Mapping[str, Decimal], confidence: float) -> dict[str, PlanItem]:
         self.balances, self.confidence, self.current = dict(balances), confidence, {}
-        self.audit.append("plan", {"balances": self.balances, "confidence": confidence, "rates": self.rates})
+        self.audit.append("plan", {"balances": self.balances, "confidence": confidence, "rates": self.rates,
+                                   "policy_hash": policy_hash(self.policy)})
         self.current = self._plan_subset(sorted(self.obs), self.balances)
         self._log(self.current)
         return dict(self.current)
@@ -183,12 +188,32 @@ class Planner:
         self.balances = dict(new_balances)
         ids = sorted(i for i, it in self.current.items() if it.cash_dependent and it.action != Action.FUND
                      and currency in {self.obs[i].currency, it.proposal.sell_currency})
-        return self._recalc(ids, {"trigger": "deposit", "currency": currency})
+        return self._recalc(ids, {"trigger": "deposit", "currency": currency, "balances": dict(self.balances)})
 
     def update_confidence(self, confidence: float) -> dict:
         self.confidence = confidence
         ids = sorted(i for i, it in self.current.items() if it.action == Action.CONVERT)
         return self._recalc(ids, {"trigger": "confidence", "confidence": confidence})
+
+    def on_transfer_failed(self, obligation_id: str, transfer_id: str, failure_type: str | None) -> dict:
+        """A payout ended CANCELLED (failed). Never retry autonomously: escalate ONLY this obligation, citing the
+        failed-payout clause and the failure_type. Its cash reservation is kept until a human decides."""
+        it = self.current[obligation_id]
+        if it.action == Action.ESCALATE and f"transfer:{transfer_id}" in it.proposal.evidence:
+            return {"recalculated": [], "changed": []}  # already handled (idempotent)
+        cl = self.policy.raw["clauses"].get("failed_payout", {}).get("id", "C7")
+        ev = tuple(it.proposal.evidence) + (f"transfer:{transfer_id}", f"failure_type:{failure_type}")
+        new = PlanItem(obligation_id, Action.ESCALATE, Proposal(obligation_id, Action.ESCALATE, evidence=ev),
+                       Verdict.NEEDS_HUMAN, [cl],
+                       [f"payout {transfer_id} CANCELLED ({failure_type}); a human decides retry / re-route / defer"],
+                       consumption=dict(it.consumption), cash_dependent=False)
+        self.current[obligation_id] = new
+        self.audit.append("recalc", {"trigger": "transfer_failed", "obligation": obligation_id,
+                                     "transfer_id": transfer_id, "failure_type": failure_type,
+                                     "recalculated": [obligation_id], "changed": [obligation_id],
+                                     "untouched": sorted(set(self.current) - {obligation_id})})
+        self._log({obligation_id: new})
+        return {"recalculated": [obligation_id], "changed": [obligation_id]}
 
     def projected_balances(self, balances: Mapping[str, Decimal]) -> dict[str, Decimal]:
         out = dict(balances)

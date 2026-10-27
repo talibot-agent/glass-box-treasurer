@@ -26,3 +26,11 @@ clauses:
     id: C6
     text: "Include each SWIFT payout fee plus a buffer in the conversion. Fee = highest observed live fee (13.43 EUR on 2026-10-26; the guide says 12.85)."
     fee: {currency: EUR, amount: 13.43, buffer: 1.00}
+  failed_payout:
+    id: C7
+    text: "A payout that ends CANCELLED (failed) is never retried autonomously: the obligation escalates to a human with the failure_type cited."
+# Cost model the verifier's dry-run uses to rank verified plans (USD). Policy code, not prompts.
+costs:
+  fx_spread_bps: 50        # estimated FX spread on converted amount
+  defer_penalty_bps: 200   # late-payment / relationship cost of deferring an obligation
+  escalation_usd: 25       # human review time per escalation

@@ -33,3 +33,13 @@ Note: a new sandbox comes pre-funded with 10M each of USD/EUR/GBP/CNY, so the de
 
 ## Next
 Beneficiaries + executors (quote→conversion, transfer) with duplicate lock → approval binding → web UI/approval card → video.
+
+## Verify-and-revise loop (cycle 2026-10-27)
+`glassbox/verify_loop.py`: proposer → stage 1 validity (coverage, ids, currencies, amounts, trusted evidence only; invoice
+memo text is never evidence) → stage 2 policy (`policy.evaluate` on running balances) → stage 3 dry run (projected balances
+vs floors, plus a cost breakdown from `policies/default.yaml: costs`) → feedback → revise, for at most 3 rounds per proposer.
+Best-of-N then picks the cheapest **verified** plan, and only that winner executes through the idempotent executor. Each
+proposal, verification, feedback and selection is written to the hash-chained audit log. The dashboard shows rejected rounds
+with their feedback. Proposers in `glassbox/proposers.py` are deterministic stubs (no LLM spend), and an LLM proposer
+would use the same `propose`/`revise` interface. Other additions: `glassbox/replay.py` (deterministic audit replay with
+a policy-hash check) and `glassbox/exceptions.py` (a failed or cancelled payout escalates its obligation once, under C7).

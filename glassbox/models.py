@@ -27,6 +27,9 @@ class Obligation:
     due_hours: int
     method: str = "LOCAL"          # LOCAL or SWIFT
     beneficiary_verified: bool = True
+    # Free text from the invoice/email. UNTRUSTED: shown to humans and to the proposer, never read by the policy
+    # engine or the verifier (a prompt-injected memo must not be able to change a verdict).
+    memo: str = ""
 
 
 @dataclass(frozen=True)

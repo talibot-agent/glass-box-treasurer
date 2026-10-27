@@ -13,15 +13,17 @@ td,th{border:1px solid #ddd;padding:4px 6px;text-align:left;vertical-align:top}t
 
 
 class Dashboard:
-    def __init__(self, planner, book, audit, transfers=None):
+    def __init__(self, planner, book, audit, transfers=None, loop=None):
         self.planner, self.book, self.audit, self.transfers = planner, book, audit, transfers
+        self.loop = loop  # optional verify_loop.LoopResult: shows rejected proposals + verifier feedback + winner
 
     def state(self):
         plan = [{"obligation": k, "action": v.action.value, "verdict": v.verdict.value, "clauses": v.clauses,
                  "reasons": v.reasons, "sell": v.proposal.sell_currency, "buy": v.proposal.buy_currency,
                  "amount": str(v.proposal.buy_amount)} for k, v in sorted(self.planner.current.items())]
         return {"plan": plan, "approvals": self.book.all(), "transfers": self.transfers.all() if self.transfers else {},
-                "audit": self.audit.entries(), "audit_valid": self.audit.verify()}
+                "audit": self.audit.entries(), "audit_valid": self.audit.verify(),
+                "loop": self.loop.ui_view() if self.loop else None}
 
     def render(self):
         s = self.state(); o = [f"<!doctype html><meta charset=utf-8><title>Glass Box Treasurer</title><style>{CSS}</style>",
@@ -31,6 +33,18 @@ class Dashboard:
         for p in s["plan"]:
             o.append(f"<tr><td>{e(p['obligation'])}<td>{e(p['action'])} {e(p['sell'] or '')}→{e(p['buy'] or '')}<td>{e(p['amount'])}"
                      f"<td class={e(p['verdict'])}>{e(p['verdict'])}<td>{e(', '.join(p['clauses']) or 'all clauses pass')}<td>{e('; '.join(p['reasons']))}")
+        if s["loop"]:
+            L = s["loop"]; w = L["winner"]
+            o.append("</table><h2>Verify &amp; revise loop</h2><p class=note>Proposals are checked by the deterministic verifier "
+                     "(validity → policy → dry run). Rejected rounds and the feedback that fixed them are kept. Winner: "
+                     f"<b>{e(w['proposer'] if w else 'none, so nothing executes')}</b>"
+                     f"{e(' at verified cost ' + w['cost_usd'] + ' USD') if w else ''}</p>"
+                     "<table><tr><th>Proposer<th>Round<th>Verified<th>Cost USD<th>Plan<th>Feedback")
+            for r in L["rounds"]:
+                plan = "; ".join(f"{p['obligation']} {p['action']}" for p in r["plan"])
+                fb = "; ".join(f"[{f['code']} {f['clause'] or ''}] {f['message']}" for f in r["feedback"]) or "none"
+                o.append(f"<tr><td>{e(r['proposer'])}<td>{e(r['round'])}<td class={'APPROVE' if r['verified'] else 'REJECT'}>"
+                         f"{e(r['verified'])}<td>{e(r['cost_usd'])}<td>{e(plan)}<td>{e(fb)}")
         o.append("</table><h2>Approvals</h2><table><tr><th>Token<th>Binding (exact)<th>Status<th>")
         for tok, a in s["approvals"].items():
             b = a["binding"]; btn = (f"<form method=post action=/approve><input type=hidden name=token value={e(tok)}>"

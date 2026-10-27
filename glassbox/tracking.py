@@ -40,10 +40,10 @@ class TransferState:
     """Persisted latest-known state per transfer, fed by webhooks and polling. Events can arrive out of order:
     a terminal state is sticky, and an older event never overwrites a newer one (ordered by created_at)."""
 
-    def __init__(self, path, audit):
+    def __init__(self, path, audit, on_change=None):
         import json
         from pathlib import Path
-        self._json, self.path, self.audit = json, Path(path), audit
+        self._json, self.path, self.audit, self.on_change = json, Path(path), audit, on_change
         self._d = json.loads(self.path.read_text()) if self.path.exists() else {}
 
     def get(self, tid):
@@ -63,6 +63,8 @@ class TransferState:
         self._d[tid] = new
         self.path.write_text(self._json.dumps(self._d, indent=1))
         self.audit.append("transfer_state", new)
+        if self.on_change:  # only on a real state change: duplicates/stale/after-terminal events never re-fire
+            self.on_change(new)
         return new
 
     def apply_event(self, evt):
