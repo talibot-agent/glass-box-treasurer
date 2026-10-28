@@ -20,8 +20,9 @@ class ExecutionRefused(Exception):
 
 
 class Executor:
-    def __init__(self, client, audit: AuditLog, approvals: ApprovalBook, ledger_path, fees=None, policy=None):
+    def __init__(self, client, audit: AuditLog, approvals: ApprovalBook, ledger_path, fees=None, policy=None, ns: uuid.UUID = NS):
         self.client, self.audit, self.approvals = client, audit, approvals
+        self.ns = ns  # request_id namespace; a live demo run passes its own so runs never collide server-side
         self.fees, self.policy = fees, policy
         self.path = Path(ledger_path)
         self.ledger = json.loads(self.path.read_text()) if self.path.exists() else {}
@@ -71,7 +72,7 @@ class Executor:
         else:
             approver = rec.get("approver") if rec else None
         if not main_done:
-            rid = str(uuid.uuid5(NS, key))
+            rid = str(uuid.uuid5(self.ns, key))
             rec = self.ledger.setdefault(key, {})
             rec.update(status="STARTED", request_id=rid, approver=approver, obligation=ob.id)
             self._save()
@@ -94,7 +95,7 @@ class Executor:
                                           "verdict": item.verdict.value, "result": res})
         if pay_key:
             prec = self.ledger.setdefault(pay_key, {})
-            prid = str(uuid.uuid5(NS, pay_key))
+            prid = str(uuid.uuid5(self.ns, pay_key))
             prec.update(status="STARTED", request_id=prid, approver=approver, obligation=ob.id)
             self._save()
             pres = self._transfer(ob, beneficiary_id, prid)
